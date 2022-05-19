@@ -2,6 +2,7 @@
 
 #include <driver/gpio.h>
 #include <driver/spi_master.h>
+#include <driver/i2c.h>
 #include <esp_log.h>
 
 #include "managed_i2c.h"
@@ -23,6 +24,8 @@ static bool rp2040_ready = false;
 static bool ice40_ready  = false;
 static bool bno055_ready = false;
 static bool bme680_ready = false;
+
+xSemaphoreHandle i2c_semaphore = NULL;
 
 esp_err_t ice40_get_done_wrapper(bool* done) {
     uint16_t  buttons;
@@ -50,11 +53,36 @@ static esp_err_t _bus_init() {
     esp_err_t res;
 
     // I2C bus
-    res = i2c_init(I2C_BUS_SYS, GPIO_I2C_SYS_SDA, GPIO_I2C_SYS_SCL, I2C_SPEED_SYS, false, false);
+    i2c_config_t i2c_config = {
+        .mode = I2C_MODE_MASTER,
+        .sda_io_num = GPIO_I2C_SDA,
+        .scl_io_num = GPIO_I2C_SCL,
+        .master.clk_speed = I2C_SPEED,
+        .sda_pullup_en = false,
+        .scl_pullup_en = false,
+        .clk_flags = 0
+    };
+
+    res = i2c_param_config(I2C_BUS, &i2c_config);
+    if (res != ESP_OK) {
+        ESP_LOGE(TAG, "Configuring I2C bus parameters failed");
+        return res;
+    }
+
+    res = i2c_set_timeout(I2C_BUS, I2C_TIMEOUT * 80);
+    if (res != ESP_OK) {
+        ESP_LOGE(TAG, "Configuring I2C bus timeout failed");
+        return res;
+    }
+
+    res = i2c_driver_install(I2C_BUS, i2c_config.mode, 0, 0, 0);
     if (res != ESP_OK) {
         ESP_LOGE(TAG, "Initializing system I2C bus failed");
         return res;
     }
+
+    i2c_semaphore = xSemaphoreCreateBinary();
+    xSemaphoreGive( i2c_semaphore );
 
     // SPI bus
     spi_bus_config_t busConfiguration = {0};
@@ -121,10 +149,11 @@ esp_err_t bsp_rp2040_init() {
     if (rp2040_ready) return ESP_OK;
 
     // RP2040 co-processor
-    dev_rp2040.i2c_bus       = I2C_BUS_SYS;
+    dev_rp2040.i2c_bus       = I2C_BUS;
     dev_rp2040.i2c_address   = RP2040_ADDR;
     dev_rp2040.pin_interrupt = GPIO_INT_RP2040;
     dev_rp2040.queue         = xQueueCreate(8, sizeof(rp2040_input_message_t));
+    dev_rp2040.i2c_semaphore = i2c_semaphore;
 
     esp_err_t res = rp2040_init(&dev_rp2040);
     if (res != ESP_OK) {
@@ -186,7 +215,7 @@ esp_err_t bsp_bno055_init() {
     if (!bsp_ready) return ESP_FAIL;
     if (bno055_ready) return ESP_OK;
 
-    esp_err_t res = bno055_init(&dev_bno055, I2C_BUS_SYS, BNO055_ADDR, GPIO_INT_BNO055, true);
+    esp_err_t res = bno055_init(&dev_bno055, I2C_BUS, BNO055_ADDR, GPIO_INT_BNO055, true);
     if (res != ESP_OK) {
         ESP_LOGE(TAG, "Initializing BNO055 failed");
         return res;
@@ -206,7 +235,7 @@ esp_err_t bsp_bme680_init() {
     if (!bsp_ready) return ESP_FAIL;
     if (bme680_ready) return ESP_OK;
 
-    dev_bme680.i2c_bus = I2C_BUS_SYS;
+    dev_bme680.i2c_bus = I2C_BUS;
     dev_bme680.i2c_address = BME680_ADDR;
 
     esp_err_t res = bme680_init(&dev_bme680);

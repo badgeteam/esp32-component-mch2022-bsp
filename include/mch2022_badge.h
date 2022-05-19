@@ -23,8 +23,8 @@
 #define GPIO_SD_CMD      15
 #define GPIO_SPI_CLK     18
 #define GPIO_SD_PWR      19  // Also LED power
-#define GPIO_I2C_SYS_SCL 21
-#define GPIO_I2C_SYS_SDA 22
+#define GPIO_I2C_SCL     21
+#define GPIO_I2C_SDA     22
 #define GPIO_SPI_MOSI    23
 #define GPIO_LCD_RESET   25
 #define GPIO_LCD_MODE    26
@@ -37,8 +37,9 @@
 #define GPIO_INT_FPGA    39  // Active low
 
 // I2C bus
-#define I2C_BUS_SYS   0
-#define I2C_SPEED_SYS 400000  // 400 kHz
+#define I2C_BUS        0
+#define I2C_SPEED      400000  // 400 kHz
+#define I2C_TIMEOUT    250 // us
 
 #define RP2040_ADDR 0x17  // RP2040 co-processor
 #define BNO055_ADDR 0x28  // BNO055 position sensor
