@@ -4,10 +4,7 @@ idf_component_register(
          "wifi_connect.c"
     INCLUDE_DIRS "." "include"
     REQUIRES
-        "i2c-bno055"
-        "i2c-bme680"
         "spi-ice40"
-        "spi-ili9341"
         "mch2022-rp2040"
         "wpa_supplicant"
         "nvs_flash"

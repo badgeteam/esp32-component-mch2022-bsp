@@ -5,24 +5,18 @@
 #include <driver/i2c.h>
 #include <esp_log.h>
 
-#include "managed_i2c.h"
 #include "rp2040.h"
 
 static const char* TAG = "hardware";
 
-static BNO055  dev_bno055  = {0};
-static ILI9341 dev_ili9341 = {0};
 static ICE40   dev_ice40   = {0};
 static RP2040  dev_rp2040  = {0};
-static BME680  dev_bme680  = {0};
 
 static uint8_t rp2040_fw_version = 0;
 
 static bool bsp_ready    = false;
 static bool rp2040_ready = false;
 static bool ice40_ready  = false;
-static bool bno055_ready = false;
-static bool bme680_ready = false;
 
 xSemaphoreHandle i2c_semaphore = NULL;
 
@@ -38,14 +32,6 @@ esp_err_t ice40_set_reset_wrapper(bool reset) {
     esp_err_t res = rp2040_set_fpga(&dev_rp2040, reset);
     vTaskDelay(100 / portTICK_PERIOD_MS);
     return res;
-}
-
-void ili9341_set_lcd_mode(bool mode) {
-    ESP_LOGI(TAG, "LCD mode switch to %s", mode ? "FPGA" : "ESP32");
-    esp_err_t res = gpio_set_level(GPIO_LCD_MODE, mode);
-    if (res != ESP_OK) {
-        ESP_LOGE(TAG, "Setting LCD mode failed");
-    }
 }
 
 static esp_err_t _bus_init() {
@@ -116,27 +102,16 @@ esp_err_t bsp_init() {
     res = _bus_init();
     if (res != ESP_OK) return res;
 
-    // LCD display
-    dev_ili9341.spi_bus               = SPI_BUS;
-    dev_ili9341.pin_cs                = GPIO_SPI_CS_LCD;
-    dev_ili9341.pin_dcx               = GPIO_SPI_DC_LCD;
-    dev_ili9341.pin_reset             = GPIO_LCD_RESET;
-    dev_ili9341.rotation              = 1;
-    dev_ili9341.color_mode            = true;      // Blue and red channels are swapped
-    dev_ili9341.spi_speed             = 40000000;  // 40MHz
-    dev_ili9341.spi_max_transfer_size = SPI_MAX_TRANSFER_SIZE;
-    dev_ili9341.callback              = ili9341_set_lcd_mode;  // Callback for changing LCD mode between ESP32 and FPGA
-
+    // LCD to FPGA
     res = gpio_set_direction(GPIO_LCD_MODE, GPIO_MODE_OUTPUT);
     if (res != ESP_OK) {
         ESP_LOGE(TAG, "Initializing LCD mode GPIO failed");
         return res;
     }
 
-    res = ili9341_init(&dev_ili9341);
+    res = gpio_set_level(GPIO_LCD_MODE, true);
     if (res != ESP_OK) {
-        ESP_LOGE(TAG, "Initializing LCD failed");
-        return res;
+        ESP_LOGE(TAG, "Setting LCD mode failed");
     }
 
     bsp_ready = true;
@@ -210,48 +185,6 @@ esp_err_t bsp_ice40_init() {
     return ESP_OK;
 }
 
-esp_err_t bsp_bno055_init() {
-    if (!bsp_ready) return ESP_FAIL;
-    if (bno055_ready) return ESP_OK;
-
-    esp_err_t res = bno055_init(&dev_bno055, I2C_BUS, BNO055_ADDR, GPIO_INT_BNO055, true);
-    if (res != ESP_OK) {
-        ESP_LOGE(TAG, "Initializing BNO055 failed");
-        return res;
-    }
-
-    res = bno055_set_power_mode(&dev_bno055, BNO055_POWER_MODE_SUSPEND);
-    if (res != ESP_OK) {
-        ESP_LOGE(TAG, "Failed to switch BNO055 power mode to suspended state");
-        return res;
-    }
-
-    bno055_ready = true;
-    return ESP_OK;
-}
-
-esp_err_t bsp_bme680_init() {
-    if (!bsp_ready) return ESP_FAIL;
-    if (bme680_ready) return ESP_OK;
-
-    dev_bme680.i2c_bus = I2C_BUS;
-    dev_bme680.i2c_address = BME680_ADDR;
-
-    esp_err_t res = bme680_init(&dev_bme680);
-    if (res != ESP_OK) {
-        ESP_LOGE(TAG, "Initializing BME680 failed");
-        return res;
-    }
-
-    bme680_ready = true;
-    return ESP_OK;
-}
-
-ILI9341* get_ili9341() {
-    if (!bsp_ready) return NULL;
-    return &dev_ili9341;
-}
-
 RP2040* get_rp2040() {
     if (!rp2040_ready) return NULL;
     return &dev_rp2040;
@@ -260,14 +193,4 @@ RP2040* get_rp2040() {
 ICE40* get_ice40() {
     if (!ice40_ready) return NULL;
     return &dev_ice40;
-}
-
-BNO055* get_bno055() {
-    if (!bno055_ready) return NULL;
-    return &dev_bno055;
-}
-
-BME680* get_bme680() {
-    if (!bme680_ready) return NULL;
-    return &dev_bme680;
 }
