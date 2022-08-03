@@ -76,3 +76,7 @@ RP2040* get_rp2040();
  */
 
 ICE40* get_ice40();
+
+/** \brief Set the LCD mode to ESP32 (false) or iCE40 (true)
+ */
+void mch22_set_lcd_mode(bool mode);

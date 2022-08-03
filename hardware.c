@@ -34,6 +34,38 @@ esp_err_t ice40_set_reset_wrapper(bool reset) {
     return res;
 }
 
+void mch22_set_lcd_mode(bool mode) {
+    esp_err_t res;
+
+    ESP_LOGI(TAG, "LCD mode switch to %s", mode ? "FPGA" : "ESP32");
+
+    /* Set the mode pin */
+    res = gpio_set_level(GPIO_LCD_MODE, mode);
+    if (res != ESP_OK)
+        goto err;
+
+    /* Reset the LCD (required for mode switch to take effect) */
+    res = gpio_set_level(GPIO_LCD_RESET, false);
+
+    res = gpio_set_direction(GPIO_LCD_RESET, GPIO_MODE_OUTPUT);
+    if (res != ESP_OK)
+        goto err;
+
+    vTaskDelay(50 / portTICK_PERIOD_MS);
+
+    res = gpio_set_direction(GPIO_LCD_RESET, GPIO_MODE_INPUT);
+    if (res != ESP_OK)
+        goto err;
+
+    vTaskDelay(50 / portTICK_PERIOD_MS);
+
+    return ESP_OK;
+
+err:
+    ESP_LOGE(TAG, "Setting LCD mode failed");
+    return res;
+}
+
 static esp_err_t _bus_init() {
     esp_err_t res;
 
