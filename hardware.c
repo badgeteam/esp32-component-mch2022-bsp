@@ -1,13 +1,13 @@
 #include "hardware.h"
 
 #include <driver/gpio.h>
-#include <driver/spi_master.h>
 #include <driver/i2c.h>
+#include <driver/spi_master.h>
 #include <esp_log.h>
 
 #include "managed_i2c.h"
-#include "rp2040.h"
 #include "pax_gfx.h"
+#include "rp2040.h"
 
 static const char* TAG = "hardware";
 
@@ -25,7 +25,7 @@ static bool ice40_ready  = false;
 static bool bno055_ready = false;
 static bool bme680_ready = false;
 
-static xSemaphoreHandle i2c_semaphore = NULL;
+static SemaphoreHandle_t i2c_semaphore = NULL;
 
 static pax_buf_t pax_buffer;
 
@@ -55,15 +55,13 @@ static esp_err_t _bus_init() {
     esp_err_t res;
 
     // I2C bus
-    i2c_config_t i2c_config = {
-        .mode = I2C_MODE_MASTER,
-        .sda_io_num = GPIO_I2C_SDA,
-        .scl_io_num = GPIO_I2C_SCL,
-        .master.clk_speed = I2C_SPEED,
-        .sda_pullup_en = false,
-        .scl_pullup_en = false,
-        .clk_flags = 0
-    };
+    i2c_config_t i2c_config = {.mode             = I2C_MODE_MASTER,
+                               .sda_io_num       = GPIO_I2C_SDA,
+                               .scl_io_num       = GPIO_I2C_SCL,
+                               .master.clk_speed = I2C_SPEED,
+                               .sda_pullup_en    = false,
+                               .scl_pullup_en    = false,
+                               .clk_flags        = 0};
 
     res = i2c_param_config(I2C_BUS, &i2c_config);
     if (res != ESP_OK) {
@@ -84,7 +82,7 @@ static esp_err_t _bus_init() {
     }
 
     i2c_semaphore = xSemaphoreCreateBinary();
-    xSemaphoreGive( i2c_semaphore );
+    xSemaphoreGive(i2c_semaphore);
 
     // SPI bus
     spi_bus_config_t busConfiguration = {0};
@@ -141,7 +139,7 @@ esp_err_t bsp_init() {
         ESP_LOGE(TAG, "Initializing LCD failed");
         return res;
     }
-    
+
     pax_buf_init(&pax_buffer, NULL, ILI9341_WIDTH, ILI9341_HEIGHT, PAX_BUF_16_565RGB);
     pax_buf_reversed(&pax_buffer, true);
 
@@ -240,7 +238,7 @@ esp_err_t bsp_bme680_init() {
     if (!bsp_ready) return ESP_FAIL;
     if (bme680_ready) return ESP_OK;
 
-    dev_bme680.i2c_bus = I2C_BUS;
+    dev_bme680.i2c_bus     = I2C_BUS;
     dev_bme680.i2c_address = BME680_ADDR;
 
     esp_err_t res = bme680_init(&dev_bme680);
@@ -261,9 +259,10 @@ ILI9341* get_ili9341() {
 esp_err_t display_flush() {
     if (!bsp_ready) return ESP_FAIL;
     if (!pax_is_dirty(&pax_buffer)) return ESP_OK;
-    //ESP_LOGI(TAG, "Flush %u to %u\n", pax_buffer.dirty_y0, pax_buffer.dirty_y1);
-    uint8_t* buffer = (uint8_t*)(pax_buffer.buf);
-    esp_err_t res = ili9341_write_partial_direct(&dev_ili9341, &buffer[pax_buffer.dirty_y0 * ILI9341_WIDTH * 2], 0, pax_buffer.dirty_y0, ILI9341_WIDTH, pax_buffer.dirty_y1 - pax_buffer.dirty_y0 + 1);
+    // ESP_LOGI(TAG, "Flush %u to %u\n", pax_buffer.dirty_y0, pax_buffer.dirty_y1);
+    uint8_t*  buffer = (uint8_t*) (pax_buffer.buf);
+    esp_err_t res    = ili9341_write_partial_direct(&dev_ili9341, &buffer[pax_buffer.dirty_y0 * ILI9341_WIDTH * 2], 0, pax_buffer.dirty_y0, ILI9341_WIDTH,
+                                                    pax_buffer.dirty_y1 - pax_buffer.dirty_y0 + 1);
     if (res != ESP_OK) return res;
     pax_mark_clean(&pax_buffer);
     return res;
